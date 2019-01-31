@@ -1,0 +1,26 @@
+{
+  "name": "hdb-advaita-api",
+  "version": "1.0.0",
+  "description": "API for consuming ipathways results and posting to HumanDB",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@feathersjs/authentication-client": "^1.0.2",
+    "@feathersjs/feathers": "^3.1.0",
+    "@feathersjs/socketio-client": "^1.0.2",
+    "app-module-path": "^2.2.0",
+    "body-parser": "^1.18.3",
+    "express": "^4.16.4",
+    "simple-node-logger": "^0.93.40",
+    "socket.io-client": "^2.0.4",
+    "superagent": "^3.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^1.18.6"
+  }
+}

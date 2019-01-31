@@ -1,0 +1,176 @@
+#!/bin/bash
+
+ set -e
+ set -u
+ set -o pipefail
+
+main () {
+	clientId=${CLIENT_ID:?"Please provide a CLIENT_ID"}
+	clientSecret=${CLIENT_SECRET:?"Please provide a CLIENT_SECRET"}
+
+	version=${VERSION:-v1b1}
+	host=${HOST:-https://api.advaitabio.com}
+	oauth_host=${OAUTH_HOST:-https://apps.advaitabio.com/oauth-provider}
+
+	max_retry_count=5
+	curl_opts=${CURL_OPTS:---retry ${max_retry_count}}
+	log_opts=${LOGGER_OPTS:--s -t $0}
+
+	inputtype=${REPORT_TYPE:-VARIANTS_SINGLE_SAMPLE}
+	filetype=${FILE_TYPE:-VCF}
+
+	title=${TITLE:-"api-proxy-report"}
+	description=${DESCRIPTION:-"created with api-proxy version 1"}
+	assembly=${ASSEMBLY:-hg19}
+	organism=${ORGANISM:-9606}
+	sseOption=${SSE:-aws:kms}
+	samples_info=${SAMPLES_INFO:-""}
+	do_not_follow=${DO_NOT_FOLLOW:-0}
+	sleep_time=20
+  post_to_discussion=${POST_TO_DISCUSSION:-0}
+
+	analysisRequestId=${ANALYSIS_REQUEST_ID:-""}
+	shareEmail=${SHARE_EMAIL:-""}
+
+	tmpdir=$(mktemp -d --suffix=.ivg-client)
+
+	request_body=${tmpdir}/request_body.json
+
+	jq --null-input {} \
+	  | jq --arg inputType "$inputtype" '.type=$inputType' \
+	  | jq --arg organism ${organism} '.parameters.organism=$organism' \
+	  | jq --arg assembly ${assembly} '.parameters.assembly=$assembly' \
+	  | jq --arg title "${title}"  '.parameters.title=$title' \
+	  | jq --arg description "${description}"  '.parameters.description=$description' > ${request_body}
+
+	html_template=/opt/ivg-template.html
+
+	if [ -z "${analysisRequestId}" ]; then
+
+		inputFilePath=${INPUT_FILE_PATH:?"No file provided as INPUT_FILE_PATH"}
+		http_output_file=${tmpdir}/http_output.txt
+		output_s3file=${tmpdir}/s3file_output.json
+		output_file=${OUTPUT_FILE_PATH:-${inputFilePath}_error.json}
+
+		get_access_token
+		submit_requests 0
+		check_status_continously 0
+
+		if [ "${status}" = "COMPLETED" ] && [ "${shareEmail}" != "" ];then
+			share_report 0
+      post_to_discussion 0
+		fi
+	else
+
+		http_output_file=${tmpdir}/http_output.txt
+		output_file=${OUTPUT_FILE_PATH:-${tmpdir}/error.json}
+		get_access_token
+		check_status_once 0
+
+		if [ "${status}" = "COMPLETED" ] && [ "${shareEmail}" != "" ];then
+			share_report 0
+      post_to_discussion 0
+		fi
+	fi
+
+	exit 0
+
+}
+
+. /opt/lib/lib.sh
+
+usage="usage: $(basename "$0") [-c <client-id>] [-s <client-secret>] [-f <input-file>]
+ [-a <assembly>] [-o output-file] [-e email] [-m html-output-file]
+ [-t <title>] [-d <description>] [-T <report-type>] [-S <samples-info>] [-D <do-not-follow>] [-A <analysis-request-id>] [-P <cluster hostname>] [-h]
+
+where:
+    -c,--client-id            api client id
+    -s,--client-secret        api client secret
+    -f,--input-file           file to analyze
+    -a,--assembly             assembly
+    -o,--output-file          output file
+    -e,--email                email to share reports with
+    -m,--html-output-file     html output file
+    -t,--title                report title
+    -d,--description          report description
+    -T,--report-type          report type, one of VARIANTS_SINGLE_SAMPLE, VARIANTS_GROUP_VS_GROUP, VARIANTS_PEDIGREE, VARIANTS_TUMOR_VS_NORMAL
+    -S,--samples-info         file with samples information
+    -D,--do-not-follow        do not wait for report to be completed
+    -A,--analysis-request-id  id of report submitted
+    -p,--post_to_discussion   post the outputs of this report to HumanDB discussion board.
+    -h,--help                 show this help text"
+
+while [[ $# -gt 0 ]]
+do
+	key="$1"
+
+	case $key in
+		-c|--client-id)
+			CLIENT_ID="$2"
+			shift # past argument
+		;;
+		-s|--client-secret)
+			CLIENT_SECRET="$2"
+			shift # past argument
+		;;
+		-f|--input-file)
+			INPUT_FILE_PATH="$2"
+			shift # past argument
+		;;
+		-o|--output-file)
+			OUTPUT_FILE_PATH="$2"
+			shift # past argument
+		;;
+		-m|--html-output-file)
+			HTML_FILE_PATH="$2"
+			shift # past argument
+		;;
+		-t|--title)
+			TITLE="$2"
+			shift # past argument
+		;;
+		-d|--description)
+			DESCRIPTION="$2"
+			shift # past argument
+		;;
+		-a|--assembly)
+			ASSEMBLY="$2"
+			shift # past argument
+ 		;;
+ 		-T|--report-type)
+			REPORT_TYPE="$2"
+			shift # past argument
+		;;
+		-S|--samples-info)
+			SAMPLES_INFO="$2"
+			shift # past argument
+ 		;;
+		-D|--do-not-follow)
+			DO_NOT_FOLLOW=1
+		;;
+    -p|--post_to_discussion)
+			POST_TO_DISCUSSION=1
+      shift # past argument
+		;;
+		-A|--analysis-request-id)
+			ANALYSIS_REQUEST_ID="$2"
+			shift # past argument
+		;;
+		-e|--email)
+			SHARE_EMAIL="$2"
+			shift # past argument
+		;;
+		-h|--help)
+			echo "$usage" >&1
+			exit 0
+		;;
+		*)
+			echo "unknown argument: $1"
+			echo "$usage" >&2
+			exit 1
+		;;
+	esac
+	shift # past argument or value
+done
+
+main
