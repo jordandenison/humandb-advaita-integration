@@ -1,4 +1,4 @@
-FROM node:9-alpine
+FROM node:10-alpine
 
 # Create the working dir and copy app files
 RUN mkdir -p /var/www && mkdir /cache && mkdir -p /advaita-results
